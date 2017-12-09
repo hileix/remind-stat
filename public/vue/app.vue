@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div id="wrap">
     <!-- 添加名称和时间 -->
     <el-form ref="form" :rules="rules" :model="form" label-width="100px" v-show="flag">
       <el-form-item label="任务名称" prop="name">
@@ -67,8 +67,12 @@
 
 
 <script>
+
 import moment from 'moment'
+import axios from 'axios'
+import qs from 'qs'
 let timer
+
 export default {
   name: 'app',
   data () {
@@ -93,6 +97,9 @@ export default {
       delayCount: 0, // 延时次数
       status: 'one', // 当前状态：one 表示是"第一次"开始任务，没有进行延时；more 表示当前状态为"延时"状态
       isShowMoreInput: false, // 是否显示输入更多时间的输入框
+      allTime: 0, // 总时间
+      taskId: 0, // 任务id
+      midTime: 0, // 时间还没结束，就点击了完成按钮的时间
     }
   },
   methods: {
@@ -102,9 +109,24 @@ export default {
         if (!valid) {
           return
         }
-        this.delayCount++ // 添加延时次数
-        this.status = 'more' // 修改状态为 more
-        this.timing()
+        axios.post('http://localhost:3041/task/delay', qs.stringify({
+          taskId: this.taskId,
+          delayRank: this.delayCount + 1,
+          delayTime: this.toS(this.form.time)
+        })).then((data) => {
+          data = data.data
+          if (data.code !== 1) {
+            alert('申请延时失败！')
+            return
+          }
+          this.midTime = 0
+          this.delayCount++ // 添加延时次数
+          this.allTime += this.toS(this.form.time)
+          this.status = 'more' // 修改状态为 more
+          this.timing()
+        }).catch((e) => {
+          alert(e)
+        })
       })
     },
     // 点击 申请延时 按钮
@@ -112,7 +134,7 @@ export default {
       this.isShowMoreInput = !this.isShowMoreInput
       // 显示了输入更多时间的输入框
       if (this.isShowMoreInput) {
-        window.resizeTo(400, 230)
+        window.resizeTo(400, 239)
       } else {
         window.resizeTo(400, 160)
       }
@@ -120,7 +142,29 @@ export default {
     },
     // 完成任务
     finishTask () {
-      this.showForm()
+      clearInterval(timer)
+      if (this.status === 'one') {
+        this.allTime = this.midTime
+      } else {
+        this.allTime = this.allTime - this.toS(this.form.time) + this.midTime
+      }
+      axios.post('http://localhost:3041/task/finish', qs.stringify({
+        taskId: this.taskId,
+        allTime: this.allTime,
+        delayCount: this.delayCount
+      })).then((data) => {
+        data = data.data
+        if (data.code !== 1) {
+          alert('完成任务失败！')
+          return
+        }
+        // 完成任务成功后，才能显示 表单
+        this.showForm()
+        this.allTime = 0
+        
+      }).catch((e) => {
+        alert(e)
+      })
     },
     // 显示倒计时界面
     showTime () {
@@ -132,29 +176,55 @@ export default {
       }
       let left = window.screen.width - document.body.clientWidth
       let top = 0
-      window.resizeTo(400, 160)
+      window.resizeTo(400, 109)
       window.moveTo(left, top)
       // html5 的 Notification 对象
-      /* let myNotification = new Notification('提示', {
+      let myNotification = new Notification('提示', {
         body: '开始计时'
-      }) */
+      })
     },
     // 显示表单
     showForm () {
       this.flag = true
-      window.resizeTo(400, 200)
+      window.resizeTo(400, 209)
       window.moveTo(0, 0)
     },
     // 开始计时
     startTiming (formName) {
+      const that = this
       this.$refs[formName].validate((valid) => {
         if (!valid) {
           return
         }
-        this.delayCount = 0 // 延时次数置0
-        this.status = 'one' // 修改状态为 one
-        this.timing()
+        // 创建任务
+        axios.post('http://localhost:3041/task/create', qs.stringify({
+          name: that.form.name,
+          time: that.toS(that.form.time)
+        })).then((data) => {
+          console.log(data)
+          data = data.data
+          if (data.code !== 1) {
+            alert('任务创建失败！')
+            return
+          }
+          that.taskId = data.data.insertId
+          // 创建任务成功之后，才开始计时
+          that.delayCount = 0 // 延时次数置0
+          that.status = 'one' // 修改状态为 one
+          that.allTime += that.toS(that.form.time) // 增加总时间
+          that.timing()
+        }).catch((e) => {
+          alert(e)
+        })
       })
+    },
+    // 将分钟转为秒，或将字符串"s12"转为"12"秒
+    toS (time) {
+      if (time.indexOf('s') === 0) {
+        return parseInt(time.slice(1))
+      } else {
+        return parseInt(time)*60
+      }
     },
     // 计时
     timing () {
@@ -178,9 +248,9 @@ export default {
       timer = setInterval(() => {
         if (allSecond-- === 0) {
           clearInterval(timer)
-          /* let myNotification = new Notification('提示', {
+          let myNotification = new Notification('提示', {
             body: '时间到'
-          }) */
+          })
           that.reqMoreTimeBtn = true
           return
         }
@@ -192,6 +262,8 @@ export default {
         let numS = allSecond%60
         let curSString = numS < 10 ? '0' + numS : '' + numS
         that.time.s = curSString
+
+        that.midTime++
       }, 1000)
     }
   }

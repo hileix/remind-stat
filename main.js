@@ -7,8 +7,8 @@ const url = require('url')
 let win
 
 function createWindow () {
-  // 创建浏览器窗口。380/180
-  win = new BrowserWindow({width: 400, height: 200, frame: false})
+  // 创建浏览器窗口。400/200
+  win = new BrowserWindow({width: 400, height: 209, frame: false})
 
   // 然后加载应用的 index.html。
   win.loadURL(url.format({
