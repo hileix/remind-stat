@@ -4,7 +4,8 @@ const WebpackNotifier = require('webpack-notifier')
 
 const config = {
   entry: {
-    index: './entry/index'
+    index: './entry/index',
+    admin: './entry/admin'
   },
   output: {
     path: path.resolve(__dirname, './build'),
